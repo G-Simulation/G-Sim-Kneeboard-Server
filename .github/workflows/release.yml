@@ -1,0 +1,107 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version from tag
+      id: get_version
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}" -replace '^v', ''
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Extracted version: $version"
+
+    - name: Prepare Setup files and create ZIP
+      id: setup_files
+      shell: pwsh
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $setupDir = "Kneeboard Server Setup/Debug"
+        $zipName = "KneeboardServer-v$version-Setup.zip"
+
+        if (-not (Test-Path "$setupDir/Kneeboard Server.msi")) {
+          echo "ERROR: MSI file not found!"
+          exit 1
+        }
+
+        if (-not (Test-Path "$setupDir/setup.exe")) {
+          echo "ERROR: setup.exe not found!"
+          exit 1
+        }
+
+        # Create ZIP with both installer files
+        Compress-Archive -Path "$setupDir/Kneeboard Server.msi", "$setupDir/setup.exe" -DestinationPath $zipName
+        echo "ZIP file created: $zipName"
+
+    - name: Generate update XML
+      shell: pwsh
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $repo = "${{ github.repository }}"
+        $downloadUrl = "https://github.com/$repo/releases/download/v$version/KneeboardServer-v$version-Setup.zip"
+        $changelogUrl = "https://github.com/$repo/releases/tag/v$version"
+        $xml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`n<item>`n    <version>$version</version>`n    <url>$downloadUrl</url>`n    <changelog>$changelogUrl</changelog>`n    <mandatory>false</mandatory>`n    <executable>Kneeboard Server.msi</executable>`n</item>"
+        Set-Content "Kneeboard_version.xml" $xml
+        echo "Generated update XML for version $version"
+
+    - name: Delete existing release if exists
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        $tag = "${{ github.ref_name }}"
+        $repo = "${{ github.repository }}"
+
+        # Try to delete existing release, ignore errors if not found
+        gh release delete $tag --repo $repo --yes 2>$null
+        exit 0
+
+    - name: Create GitHub Release
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $tag = "${{ github.ref_name }}"
+
+        gh release create $tag `
+          "KneeboardServer-v$version-Setup.zip" `
+          "Kneeboard_version.xml" `
+          --title "Kneeboard Server v$version" `
+          --generate-notes
+
+    - name: Update README with new version
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+
+        # Read README
+        $readme = Get-Content "README.md" -Raw
+
+        # Replace version line
+        $readme = $readme -replace 'Aktuelle Version: [\d\.]+', "Aktuelle Version: $version"
+
+        # Write back
+        Set-Content "README.md" $readme -NoNewline
+
+        # Commit and push
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add README.md
+        git commit -m "Update README version to $version" || echo "No changes to commit"
+        git push origin HEAD:main
