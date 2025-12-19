@@ -250,5 +250,41 @@ namespace Kneeboard_Server.Properties {
                 this["maxCacheSizeMB"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string cachedFlightplan {
+            get {
+                return ((string)(this["cachedFlightplan"]));
+            }
+            set {
+                this["cachedFlightplan"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string cachedSimbriefTimeGenerated {
+            get {
+                return ((string)(this["cachedSimbriefTimeGenerated"]));
+            }
+            set {
+                this["cachedSimbriefTimeGenerated"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string cachedSimbriefOFPData {
+            get {
+                return ((string)(this["cachedSimbriefOFPData"]));
+            }
+            set {
+                this["cachedSimbriefOFPData"] = value;
+            }
+        }
     }
 }

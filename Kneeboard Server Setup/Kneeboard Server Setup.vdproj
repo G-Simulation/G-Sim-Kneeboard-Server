@@ -268,12 +268,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_5070CA3FC101429A996A78D58DA3845C"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_52D7347797F9426498BD488CA7ADB0DC"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -652,6 +646,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_ACF0404E73D146D082CCCEBD0F572A04"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_AD2C744F04B1EA11F920CC9E7809DDD7"
         "OwnerKey" = "8:_0417B2543A4A4685BC5344132D372D8B"
         "MsmSig" = "8:_UNDEFINED"
@@ -790,6 +790,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_D1AD707D36984824A57C96B967682500"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_D4F090BA84064F66B2ADE97A133D6889"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -839,6 +845,12 @@
         "Entry"
         {
         "MsmKey" = "8:_E4279235EC5A481A9BAB26732A9543C6"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_E6CF7CE61314430EBE1F41FD1E6A0C6F"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -922,12 +934,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_FC3BFD3525AA4738B709DB4D13E3D427"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_FF1AF79B77E969C2F5BBCBD1901FE7B9"
         "OwnerKey" = "8:_6C19B7E1DC02477B0BF68B500BEAE954"
         "MsmSig" = "8:_UNDEFINED"
@@ -954,24 +960,6 @@
         {
         "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_0417B2543A4A4685BC5344132D372D8B"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_12D6BF0DFF19A76CCBDFBB98E8BC029D"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_6D1D391B4490E1BD982A1CF0B95F39F6"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_76EF229AB9A1F676527517858575D696"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -1128,6 +1116,24 @@
         {
         "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_897271856E5D6ACEAAD43AB44D124041"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_12D6BF0DFF19A76CCBDFBB98E8BC029D"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_6D1D391B4490E1BD982A1CF0B95F39F6"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_76EF229AB9A1F676527517858575D696"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -1850,26 +1856,6 @@
             "Register" = "3:1"
             "Exclude" = "11:FALSE"
             "IsDependency" = "11:TRUE"
-            "IsolateTo" = "8:"
-            }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_5070CA3FC101429A996A78D58DA3845C"
-            {
-            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\manuals\\Kneeboard_Manual_DE.md"
-            "TargetName" = "8:Kneeboard_Manual_DE.md"
-            "Tag" = "8:"
-            "Folder" = "8:_68714E5EFF074A4F90AC24359FB76115"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_52D7347797F9426498BD488CA7ADB0DC"
@@ -3026,6 +3012,26 @@
             "IsDependency" = "11:TRUE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_ACF0404E73D146D082CCCEBD0F572A04"
+            {
+            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\manuals\\G-Simulations Kneeboard - Navigation Log Anleitung.pdf"
+            "TargetName" = "8:G-Simulations Kneeboard - Navigation Log Anleitung.pdf"
+            "Tag" = "8:"
+            "Folder" = "8:_68714E5EFF074A4F90AC24359FB76115"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
             "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_AD2C744F04B1EA11F920CC9E7809DDD7"
             {
             "AssemblyRegister" = "3:1"
@@ -3490,6 +3496,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_D1AD707D36984824A57C96B967682500"
+            {
+            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\cssgg-svg.js"
+            "TargetName" = "8:cssgg-svg.js"
+            "Tag" = "8:"
+            "Folder" = "8:_12C736CD5B81462F92BF28B77A49A698"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_D4F090BA84064F66B2ADE97A133D6889"
             {
             "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\x64\\pdfium.dll"
@@ -3656,6 +3682,26 @@
             "TargetName" = "8:layers-2x.png"
             "Tag" = "8:"
             "Folder" = "8:_F29D19D0196B4593A511CE1DC4CF905C"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_E6CF7CE61314430EBE1F41FD1E6A0C6F"
+            {
+            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\manuals\\G-Simulations Kneeboard - Navigation Log Guide.pdf"
+            "TargetName" = "8:G-Simulations Kneeboard - Navigation Log Guide.pdf"
+            "Tag" = "8:"
+            "Folder" = "8:_68714E5EFF074A4F90AC24359FB76115"
             "Condition" = "8:"
             "Transitive" = "11:FALSE"
             "Vital" = "11:TRUE"
@@ -3930,26 +3976,6 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_FC3BFD3525AA4738B709DB4D13E3D427"
-            {
-            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\manuals\\Kneeboard_Manual_EN.md"
-            "TargetName" = "8:Kneeboard_Manual_EN.md"
-            "Tag" = "8:"
-            "Folder" = "8:_68714E5EFF074A4F90AC24359FB76115"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
             "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_FF1AF79B77E969C2F5BBCBD1901FE7B9"
             {
             "AssemblyRegister" = "3:1"
@@ -4148,7 +4174,7 @@
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Kneeboard Server"
         "ProductCode" = "8:{FFA8814E-B4FD-4AFB-895B-1BC7C30B6729}"
-        "PackageCode" = "8:{F212B370-CCEF-4721-8CD9-A98F510662E7}"
+        "PackageCode" = "8:{467E6607-8D97-4348-9155-1C2722E3F9BB}"
         "UpgradeCode" = "8:{B5157DB2-9BE0-4BA2-A22E-33C25A4FFCA3}"
         "AspNetVersion" = "8:2.0.50727.0"
         "RestartWWWService" = "11:FALSE"

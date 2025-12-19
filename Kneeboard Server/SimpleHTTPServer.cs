@@ -1784,6 +1784,17 @@ namespace Kneeboard_Server
                 long timestamp = Properties.Settings.Default.valuesTimestamp;
                 ResponseString(context, timestamp.ToString());
             }
+            else if (command == "clearNavlogValues")
+            {
+                Console.WriteLine("[NavlogSync] Server clearing navlog data");
+                values = "";
+                valuesTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                Properties.Settings.Default.values = "";
+                Properties.Settings.Default.valuesTimestamp = valuesTimestamp;
+                Properties.Settings.Default.Save();
+                Console.WriteLine($"[NavlogSync] Server navlog data cleared, timestamp: {valuesTimestamp}");
+                ResponseString(context, "OK");
+            }
             else if (command == "getFlightplan")
             {
                 if (Kneeboard_Server.flightplan != null)
@@ -1798,19 +1809,55 @@ namespace Kneeboard_Server
             }
             else if (command == "clearFlightplan")
             {
+                // Full clear: removes everything including SimBrief cache
                 Kneeboard_Server.flightplan = null;
+                Kneeboard_Server.cachedSimbriefTimeGenerated = null;  // Reset SimBrief timestamp cache
+                Kneeboard_Server.simbriefOFPData = null;              // Reset OFP data
+
+                // Clear persisted flightplan data
+                Kneeboard_Server.ClearPersistedFlightplanData();
 
                 // Also clear navlog data
                 Properties.Settings.Default.values = "";
                 Properties.Settings.Default.valuesTimestamp = 0;
                 Properties.Settings.Default.Save();
-                Console.WriteLine("[NavlogSync] Navlog data cleared along with flight plan");
+                Console.WriteLine("[NavlogSync] Navlog data and SimBrief cache cleared along with flight plan");
 
                 ResponseString(context, "cleared");
+            }
+            else if (command == "clearLocalFlightplan")
+            {
+                // Soft clear: only clears navlog but keeps SimBrief cache intact
+                // Used when user deletes flightplan via map - they can immediately sync again
+                Properties.Settings.Default.values = "";
+                Properties.Settings.Default.valuesTimestamp = 0;
+                Properties.Settings.Default.Save();
+
+                // Check if server still has a flightplan from SimBrief
+                bool hasServerFlightplan = !string.IsNullOrEmpty(Kneeboard_Server.flightplan);
+                Console.WriteLine("[NavlogSync] Local navlog cleared, SimBrief cache preserved: " + hasServerFlightplan);
+
+                ResponseJson(context, $"{{\"cleared\":true,\"hasServerFlightplan\":{hasServerFlightplan.ToString().ToLower()}}}");
             }
             else if (command == "hasFlightplan")
             {
                 ResponseString(context, Kneeboard_Server.flightplan != null ? "true" : "false");
+            }
+            else if (command == "hasSimbriefId")
+            {
+                bool hasId = !string.IsNullOrEmpty(Properties.Settings.Default.simbriefId);
+                ResponseJson(context, $"{{\"hasSimbriefId\":{hasId.ToString().ToLower()}}}");
+            }
+            else if (command == "checkSimbriefUpdate")
+            {
+                bool updateAvailable = Kneeboard_Server.CheckSimbriefUpdateAvailable();
+                ResponseJson(context, $"{{\"updateAvailable\":{updateAvailable.ToString().ToLower()}}}");
+            }
+            else if (command == "hasServerFlightplan")
+            {
+                // Check if server has a flightplan loaded (from background sync or previous session)
+                bool hasFlightplan = !string.IsNullOrEmpty(Kneeboard_Server.flightplan);
+                ResponseJson(context, $"{{\"hasFlightplan\":{hasFlightplan.ToString().ToLower()}}}");
             }
             else if (command == "getFlightplanHash")
             {

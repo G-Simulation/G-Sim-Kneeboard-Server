@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.UI.WebControls;
 using System.Windows.Controls;
@@ -36,6 +37,220 @@ namespace Kneeboard_Server
         public static int filesShowed = 0;
         public static string flightplan;
         public static string simbriefOFPData;
+        public static string cachedSimbriefTimeGenerated = null;
+
+        // Background SimBrief sync
+        private static System.Threading.Timer simbriefBackgroundTimer;
+        private static readonly object simbriefSyncLock = new object();
+        private static bool isBackgroundSyncRunning = false;
+        private const int SIMBRIEF_CHECK_INTERVAL_MS = 180000; // 3 minutes
+
+        /// <summary>
+        /// Loads persisted flightplan data from Settings on startup
+        /// </summary>
+        public static void LoadPersistedFlightplanData()
+        {
+            try
+            {
+                string persistedFlightplan = Properties.Settings.Default.cachedFlightplan;
+                string persistedTimestamp = Properties.Settings.Default.cachedSimbriefTimeGenerated;
+                string persistedOFPData = Properties.Settings.Default.cachedSimbriefOFPData;
+
+                if (!string.IsNullOrEmpty(persistedFlightplan))
+                {
+                    flightplan = persistedFlightplan;
+                    Console.WriteLine($"[Persistence] Loaded flightplan from settings (length: {flightplan.Length})");
+                }
+
+                if (!string.IsNullOrEmpty(persistedTimestamp))
+                {
+                    cachedSimbriefTimeGenerated = persistedTimestamp;
+                    Console.WriteLine($"[Persistence] Loaded SimBrief timestamp: {cachedSimbriefTimeGenerated}");
+                }
+
+                if (!string.IsNullOrEmpty(persistedOFPData))
+                {
+                    simbriefOFPData = persistedOFPData;
+                    Console.WriteLine($"[Persistence] Loaded OFP data from settings (length: {simbriefOFPData.Length})");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Persistence] Error loading persisted data: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Saves flightplan data to Settings for persistence
+        /// </summary>
+        public static void SaveFlightplanDataToSettings()
+        {
+            try
+            {
+                Properties.Settings.Default.cachedFlightplan = flightplan ?? "";
+                Properties.Settings.Default.cachedSimbriefTimeGenerated = cachedSimbriefTimeGenerated ?? "";
+                Properties.Settings.Default.cachedSimbriefOFPData = simbriefOFPData ?? "";
+                Properties.Settings.Default.Save();
+                Console.WriteLine("[Persistence] Flightplan data saved to settings");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Persistence] Error saving data: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Clears all persisted flightplan data
+        /// </summary>
+        public static void ClearPersistedFlightplanData()
+        {
+            try
+            {
+                Properties.Settings.Default.cachedFlightplan = "";
+                Properties.Settings.Default.cachedSimbriefTimeGenerated = "";
+                Properties.Settings.Default.cachedSimbriefOFPData = "";
+                Properties.Settings.Default.Save();
+                Console.WriteLine("[Persistence] Flightplan data cleared from settings");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Persistence] Error clearing data: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Starts the background SimBrief sync timer
+        /// </summary>
+        public static void StartBackgroundSimbriefSync()
+        {
+            if (string.IsNullOrEmpty(Properties.Settings.Default.simbriefId))
+            {
+                Console.WriteLine("[SimBrief Background] No SimBrief ID configured, skipping background sync");
+                return;
+            }
+
+            // Stop existing timer if any
+            StopBackgroundSimbriefSync();
+
+            Console.WriteLine("[SimBrief Background] Starting background sync timer (interval: 3 min)");
+
+            // Initial sync immediately, then every 3 minutes
+            simbriefBackgroundTimer = new System.Threading.Timer(
+                BackgroundSimbriefSyncCallback,
+                null,
+                0, // Start immediately
+                SIMBRIEF_CHECK_INTERVAL_MS
+            );
+        }
+
+        /// <summary>
+        /// Stops the background SimBrief sync timer
+        /// </summary>
+        public static void StopBackgroundSimbriefSync()
+        {
+            if (simbriefBackgroundTimer != null)
+            {
+                simbriefBackgroundTimer.Dispose();
+                simbriefBackgroundTimer = null;
+                Console.WriteLine("[SimBrief Background] Background sync timer stopped");
+            }
+        }
+
+        /// <summary>
+        /// Background callback that checks and loads SimBrief data
+        /// </summary>
+        private static void BackgroundSimbriefSyncCallback(object state)
+        {
+            // Prevent concurrent syncs
+            lock (simbriefSyncLock)
+            {
+                if (isBackgroundSyncRunning) return;
+                isBackgroundSyncRunning = true;
+            }
+
+            try
+            {
+                if (string.IsNullOrEmpty(Properties.Settings.Default.simbriefId))
+                {
+                    return;
+                }
+
+                Console.WriteLine("[SimBrief Background] Checking for updates...");
+
+                var url = GetSimbriefApiUrl();
+                string xmlStr;
+                using (var wc = new WebClient())
+                {
+                    xmlStr = wc.DownloadString(url);
+                }
+
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(xmlStr);
+
+                // Get current time_generated
+                var timeNode = xmlDoc.SelectSingleNode("/OFP/params/time_generated");
+                string currentTimeGenerated = (timeNode?.InnerText ?? "").Trim();
+
+                // Check if this is a new/updated flightplan
+                if (!string.IsNullOrEmpty(cachedSimbriefTimeGenerated) &&
+                    currentTimeGenerated == cachedSimbriefTimeGenerated)
+                {
+                    Console.WriteLine($"[SimBrief Background] No update (timestamp unchanged: {cachedSimbriefTimeGenerated})");
+                    return;
+                }
+
+                Console.WriteLine($"[SimBrief Background] New flightplan detected! (old: {cachedSimbriefTimeGenerated}, new: {currentTimeGenerated})");
+
+                // Parse OFP data
+                using (StringReader stringReader = new StringReader(xmlStr))
+                {
+                    XmlSerializer ofpSerializer = new XmlSerializer(typeof(Simbrief.OFP));
+                    Simbrief.OFP ofpData = (Simbrief.OFP)ofpSerializer.Deserialize(stringReader);
+                    simbriefOFPData = Newtonsoft.Json.JsonConvert.SerializeObject(ofpData);
+                    Console.WriteLine($"[SimBrief Background] OFP data loaded (length: {simbriefOFPData.Length})");
+                }
+
+                // Get PLN download URL and load waypoints
+                var plnNode = xmlDoc.DocumentElement.SelectSingleNode("/OFP/fms_downloads/mfs/link");
+                if (plnNode != null)
+                {
+                    string plnUrl = plnNode.InnerText;
+                    using (var wc = new WebClient())
+                    using (XmlReader reader = XmlReader.Create(new MemoryStream(wc.DownloadData(plnUrl))))
+                    {
+                        XmlSerializer serializer = new XmlSerializer(typeof(SimBaseDocument));
+                        SimBaseDocument waypoints = (SimBaseDocument)serializer.Deserialize(reader);
+
+                        var combinedData = new
+                        {
+                            pln = waypoints,
+                            ofp = simbriefOFPData != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(simbriefOFPData) : null
+                        };
+                        flightplan = Newtonsoft.Json.JsonConvert.SerializeObject(combinedData);
+                        Console.WriteLine($"[SimBrief Background] Flightplan loaded (length: {flightplan.Length})");
+                    }
+                }
+
+                // Update cached timestamp
+                cachedSimbriefTimeGenerated = currentTimeGenerated;
+
+                // Persist to settings
+                SaveFlightplanDataToSettings();
+
+                Console.WriteLine("[SimBrief Background] Background sync complete - data ready for instant use");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimBrief Background] Error during sync: {ex.Message}");
+            }
+            finally
+            {
+                lock (simbriefSyncLock)
+                {
+                    isBackgroundSyncRunning = false;
+                }
+            }
+        }
 
         // Enum to track the source of the last imported flightplan
         private enum FlightplanSource { None, SimBrief, LocalPLN }
@@ -206,6 +421,12 @@ namespace Kneeboard_Server
         public Kneeboard_Server()
         {
             InitializeComponent();
+
+            // Load persisted flightplan data from previous session
+            LoadPersistedFlightplanData();
+
+            // Start background SimBrief sync to keep OFP data current
+            StartBackgroundSimbriefSync();
 
             //delete hover color
             loadButton.FlatAppearance.MouseOverBackColor = System.Drawing.Color.Transparent;
@@ -446,6 +667,8 @@ namespace Kneeboard_Server
                         if (!string.IsNullOrWhiteSpace(simbriefDialog.textBox1.Text))
                         {
                             Properties.Settings.Default.simbriefId = simbriefDialog.textBox1.Text.Trim();
+                            // Restart background sync with new ID
+                            StartBackgroundSimbriefSync();
                         }
                     }
                 }
@@ -1761,16 +1984,55 @@ namespace Kneeboard_Server
                 latDir, latDeg, latMin, latSec, lonDir, lonDeg, lonMin, lonSec, alt);
         }
 
+        /// <summary>
+        /// Gets the time_generated timestamp from SimBrief API without downloading the full flightplan
+        /// </summary>
+        private static string GetSimbriefTimeGenerated()
+        {
+            var url = GetSimbriefApiUrl();
+            using (var wc = new WebClient())
+            {
+                string xmlStr = wc.DownloadString(url);
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(xmlStr);
+                var timeNode = xmlDoc.SelectSingleNode("/OFP/params/time_generated");
+                return (timeNode?.InnerText ?? "").Trim();
+            }
+        }
+
+        /// <summary>
+        /// Checks if a newer flightplan is available on SimBrief compared to the cached one
+        /// </summary>
+        public static bool CheckSimbriefUpdateAvailable()
+        {
+            if (string.IsNullOrEmpty(Properties.Settings.Default.simbriefId)) return false;
+            // Only check for updates if we have both a flightplan AND a cached timestamp
+            // This prevents false positives when browser has no flightplan but server has persisted data
+            if (flightplan == null || cachedSimbriefTimeGenerated == null) return false;
+            try
+            {
+                string currentTime = GetSimbriefTimeGenerated();
+                bool updateAvailable = currentTime != cachedSimbriefTimeGenerated;
+                Console.WriteLine($"[SimBrief] Update check: cached={cachedSimbriefTimeGenerated}, current={currentTime}, updateAvailable={updateAvailable}");
+                return updateAvailable;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimBrief] Error checking for updates: {ex.Message}");
+                return false;
+            }
+        }
+
         public static string syncFlightplan()
         {
-            // Clear cache to force fresh load from source
-            flightplan = null;
-
             // Decision based on last import source
             if (lastFlightplanSource == FlightplanSource.LocalPLN &&
                 Properties.Settings.Default.communityFolderPath != "" &&
                 System.IO.File.Exists(Properties.Settings.Default.communityFolderPath))
             {
+                // Clear cache for local PLN reload
+                flightplan = null;
+
                 // Load local PLN file with consistent format
                 using (XmlReader reader = XmlReader.Create(new FileStream(Properties.Settings.Default.communityFolderPath, FileMode.Open), new XmlReaderSettings() { CloseInput = true }))
                 {
@@ -1784,76 +2046,98 @@ namespace Kneeboard_Server
             }
             else if (lastFlightplanSource == FlightplanSource.SimBrief ||
                      (lastFlightplanSource == FlightplanSource.None && Properties.Settings.Default.simbriefId != ""))
+            {
+                try
                 {
-                    try
+                    var m_strFilePath = GetSimbriefApiUrl();
+                    string xmlStr;
+                    using (var wc = new WebClient())
                     {
-                        var m_strFilePath = GetSimbriefApiUrl();
-                        string xmlStr;
-                        using (var wc = new WebClient())
-                        {
-                            xmlStr = wc.DownloadString(m_strFilePath);
-                        }
-                        var xmlDoc = new XmlDocument();
-                        xmlDoc.LoadXml(xmlStr);
+                        xmlStr = wc.DownloadString(m_strFilePath);
+                    }
+                    var xmlDoc = new XmlDocument();
+                    xmlDoc.LoadXml(xmlStr);
 
-                        // OFP-Daten deserialisieren und speichern
-                        using (StringReader stringReader = new StringReader(xmlStr))
-                        {
-                            XmlSerializer ofpSerializer = new XmlSerializer(typeof(Simbrief.OFP));
-                            Simbrief.OFP ofpData = (Simbrief.OFP)ofpSerializer.Deserialize(stringReader);
-                            simbriefOFPData = Newtonsoft.Json.JsonConvert.SerializeObject(ofpData);
-                            Console.WriteLine("[OFP Debug syncFlightplan] OFP deserialized, JSON length: " + (simbriefOFPData != null ? simbriefOFPData.Length.ToString() : "null"));
-                        }
+                    // Get time_generated for cache comparison
+                    var timeNode = xmlDoc.SelectSingleNode("/OFP/params/time_generated");
+                    string currentTimeGenerated = (timeNode?.InnerText ?? "").Trim();
 
-                        var plnNode = xmlDoc.DocumentElement.SelectSingleNode("/OFP/fms_downloads/mfs/link");
-                        var ofpNode = xmlDoc.DocumentElement.SelectSingleNode("/OFP/files/pdf/link");
+                    // If we have a cached flightplan and timestamp matches, return cached version
+                    if (flightplan != null && cachedSimbriefTimeGenerated != null &&
+                        currentTimeGenerated == cachedSimbriefTimeGenerated)
+                    {
+                        Console.WriteLine($"[SimBrief] Using cached flightplan (timestamp {cachedSimbriefTimeGenerated} unchanged)");
+                        return flightplan;
+                    }
 
-                        if (plnNode == null || ofpNode == null)
-                        {
-                            Console.WriteLine("SimBrief: Could not retrieve flight plan data from XML response");
-                            return flightplan;
-                        }
+                    Console.WriteLine($"[SimBrief] Loading new flightplan (cached: {cachedSimbriefTimeGenerated}, current: {currentTimeGenerated})");
 
-                        string value = plnNode.InnerText;
-                        string simbriefOFPLink = ofpNode.InnerText;
+                    // OFP-Daten deserialisieren und speichern
+                    using (StringReader stringReader = new StringReader(xmlStr))
+                    {
+                        XmlSerializer ofpSerializer = new XmlSerializer(typeof(Simbrief.OFP));
+                        Simbrief.OFP ofpData = (Simbrief.OFP)ofpSerializer.Deserialize(stringReader);
+                        simbriefOFPData = Newtonsoft.Json.JsonConvert.SerializeObject(ofpData);
+                        Console.WriteLine("[OFP Debug syncFlightplan] OFP deserialized, JSON length: " + (simbriefOFPData != null ? simbriefOFPData.Length.ToString() : "null"));
+                    }
 
-                        if (System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
+                    var plnNode = xmlDoc.DocumentElement.SelectSingleNode("/OFP/fms_downloads/mfs/link");
+                    var ofpNode = xmlDoc.DocumentElement.SelectSingleNode("/OFP/files/pdf/link");
+
+                    if (plnNode == null || ofpNode == null)
+                    {
+                        Console.WriteLine("SimBrief: Could not retrieve flight plan data from XML response");
+                        return flightplan;
+                    }
+
+                    string value = plnNode.InnerText;
+                    string simbriefOFPLink = ofpNode.InnerText;
+
+                    if (System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
+                    {
+                        using (System.Net.WebClient client = new System.Net.WebClient())
                         {
-                            using (System.Net.WebClient client = new System.Net.WebClient())
-                            {
-                                client.DownloadFile(new Uri("https://www.simbrief.com/ofp/flightplans/" + value), folderpath + @"\data\simbrief.pln");
-                                communityFolderPath = "";
-                            }
-                        }
-                        using (XmlReader reader = XmlReader.Create(new FileStream(folderpath + @"\data\simbrief.pln", FileMode.Open), new XmlReaderSettings() { CloseInput = true }))
-                        {
-                            XmlSerializer serializer = new XmlSerializer(typeof(SimBaseDocument));
-                            SimBaseDocument waypoints = (SimBaseDocument)serializer.Deserialize(reader);
-                            // Kombiniertes Objekt mit PLN und OFP-Daten senden
-                            Console.WriteLine("[OFP Debug syncFlightplan] Creating combined data - simbriefOFPData is " + (simbriefOFPData != null ? "NOT null, length: " + simbriefOFPData.Length : "NULL"));
-                            var combinedData = new
-                            {
-                                pln = waypoints,
-                                ofp = simbriefOFPData != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(simbriefOFPData) : null
-                            };
-                            flightplan = Newtonsoft.Json.JsonConvert.SerializeObject(combinedData);
-                            lastFlightplanSource = FlightplanSource.SimBrief;
-                            Console.WriteLine("[OFP Debug syncFlightplan] Combined flightplan created, length: " + (flightplan != null ? flightplan.Length.ToString() : "null"));
-                            reader.Close();
+                            client.DownloadFile(new Uri("https://www.simbrief.com/ofp/flightplans/" + value), folderpath + @"\data\simbrief.pln");
+                            communityFolderPath = "";
                         }
                     }
-                    catch (System.Net.WebException webEx)
+                    using (XmlReader reader = XmlReader.Create(new FileStream(folderpath + @"\data\simbrief.pln", FileMode.Open), new XmlReaderSettings() { CloseInput = true }))
                     {
-                        Console.WriteLine($"SimBrief sync error (network): {webEx.Message}");
+                        XmlSerializer serializer = new XmlSerializer(typeof(SimBaseDocument));
+                        SimBaseDocument waypoints = (SimBaseDocument)serializer.Deserialize(reader);
+                        // Kombiniertes Objekt mit PLN und OFP-Daten senden
+                        Console.WriteLine("[OFP Debug syncFlightplan] Creating combined data - simbriefOFPData is " + (simbriefOFPData != null ? "NOT null, length: " + simbriefOFPData.Length : "NULL"));
+                        var combinedData = new
+                        {
+                            pln = waypoints,
+                            ofp = simbriefOFPData != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(simbriefOFPData) : null
+                        };
+                        flightplan = Newtonsoft.Json.JsonConvert.SerializeObject(combinedData);
+                        lastFlightplanSource = FlightplanSource.SimBrief;
+
+                        // Update cached timestamp after successful load
+                        cachedSimbriefTimeGenerated = currentTimeGenerated;
+                        Console.WriteLine($"[SimBrief] Cached timestamp updated to: {cachedSimbriefTimeGenerated}");
+
+                        // Persist flightplan data to settings
+                        SaveFlightplanDataToSettings();
+
+                        Console.WriteLine("[OFP Debug syncFlightplan] Combined flightplan created, length: " + (flightplan != null ? flightplan.Length.ToString() : "null"));
+                        reader.Close();
                     }
-                    catch (XmlException xmlEx)
-                    {
-                        Console.WriteLine($"SimBrief sync error (XML parsing): {xmlEx.Message}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"SimBrief sync error: {ex.Message}");
-                    }
+                }
+                catch (System.Net.WebException webEx)
+                {
+                    Console.WriteLine($"SimBrief sync error (network): {webEx.Message}");
+                }
+                catch (XmlException xmlEx)
+                {
+                    Console.WriteLine($"SimBrief sync error (XML parsing): {xmlEx.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"SimBrief sync error: {ex.Message}");
+                }
             }
             return flightplan;
         }

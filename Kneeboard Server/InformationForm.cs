@@ -169,6 +169,8 @@ namespace Kneeboard_Server
         {
             Properties.Settings.Default.simbriefId = SimbriefIdInput.Text;
             Properties.Settings.Default.Save();
+            // Restart background SimBrief sync with new ID
+            Kneeboard_Server.StartBackgroundSimbriefSync();
         }
 
         private void ClearCacheButton_Click(object sender, EventArgs e)
