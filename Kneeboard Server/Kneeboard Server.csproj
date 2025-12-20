@@ -131,6 +131,7 @@
       <DependentUpon>InformationForm.cs</DependentUpon>
     </Compile>
     <Compile Include="SimpleHTTPServer.cs" />
+    <Compile Include="SimConnectManager.cs" />
     <Compile Include="KneeboardServer.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -228,6 +229,10 @@
       <HintPath>.\Microsoft.FlightSimulator.SimConnect.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.VisualBasic" />
+    <!-- Native SimConnect DLL - must be copied to output -->
+    <None Include="SimConnect.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="System" />

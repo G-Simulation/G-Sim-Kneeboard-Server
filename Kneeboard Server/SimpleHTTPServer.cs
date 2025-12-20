@@ -1315,6 +1315,166 @@ namespace Kneeboard_Server
         }
 
         // ============================================================================
+        // SimConnect API Handlers
+        // ============================================================================
+
+        private void HandleSimConnectPositionRequest(HttpListenerContext context)
+        {
+            try
+            {
+                var position = _kneeboardServer.GetSimConnectPosition();
+
+                if (position.HasValue)
+                {
+                    var pos = position.Value;
+
+                    var json = new
+                    {
+                        connected = true,
+                        latitude = pos.Latitude,
+                        longitude = pos.Longitude,
+                        altitude = pos.Altitude,
+                        heading = pos.Heading,
+                        groundSpeed = pos.GroundSpeed,
+                        indicatedAirspeed = pos.IndicatedAirspeed,
+                        windDirection = pos.WindDirection,
+                        windSpeed = pos.WindSpeed,
+                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    };
+
+                    string jsonString = Newtonsoft.Json.JsonConvert.SerializeObject(json);
+                    ResponseJson(context, jsonString);
+                }
+                else
+                {
+                    ResponseJson(context, "{\"connected\":false}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimConnect API] Position request error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, "{\"connected\":false,\"error\":\"Internal error\"}");
+            }
+        }
+
+        private void HandleSimConnectStatusRequest(HttpListenerContext context)
+        {
+            try
+            {
+                bool connected = _kneeboardServer.IsSimConnectConnected();
+
+                var json = new
+                {
+                    connected = connected,
+                    simulator = connected ? "MSFS" : (object)null,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+
+                ResponseJson(context, Newtonsoft.Json.JsonConvert.SerializeObject(json));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimConnect API] Status request error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, "{\"connected\":false}");
+            }
+        }
+
+        private void HandleSimConnectTeleportRequest(HttpListenerContext context)
+        {
+            if (context.Request.HttpMethod != "POST")
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.MethodNotAllowed;
+                ResponseJson(context, "{\"success\":false,\"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            try
+            {
+                string requestBody = GetPostedText(context.Request);
+                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(requestBody);
+
+                double lat = data.lat;
+                double lng = data.lng;
+                double? altitude = data.altitude != null ? (double?)data.altitude : null;
+                double? heading = data.heading != null ? (double?)data.heading : null;
+                double? speed = data.speed != null ? (double?)data.speed : null;
+
+                _kneeboardServer.SimConnectTeleport(lat, lng, altitude, heading, speed);
+
+                ResponseJson(context, "{\"success\":true,\"error\":null}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimConnect API] Teleport error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                string errorJson = Newtonsoft.Json.JsonConvert.SerializeObject(new { success = false, error = ex.Message });
+                ResponseJson(context, errorJson);
+            }
+        }
+
+        private void HandleSimConnectPauseRequest(HttpListenerContext context)
+        {
+            if (context.Request.HttpMethod != "POST")
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.MethodNotAllowed;
+                ResponseJson(context, "{\"success\":false,\"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            try
+            {
+                string requestBody = GetPostedText(context.Request);
+                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(requestBody);
+
+                bool paused = data.paused;
+
+                _kneeboardServer.SimConnectSetPause(paused);
+
+                string responseJson = Newtonsoft.Json.JsonConvert.SerializeObject(new { success = true, paused = paused });
+                ResponseJson(context, responseJson);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimConnect API] Pause error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                string errorJson = Newtonsoft.Json.JsonConvert.SerializeObject(new { success = false, error = ex.Message });
+                ResponseJson(context, errorJson);
+            }
+        }
+
+        private void HandleSimConnectRadioFrequencyRequest(HttpListenerContext context)
+        {
+            if (context.Request.HttpMethod != "POST")
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.MethodNotAllowed;
+                ResponseJson(context, "{\"success\":false,\"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            try
+            {
+                string requestBody = GetPostedText(context.Request);
+                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(requestBody);
+
+                string radio = data.radio;
+                uint frequencyHz = data.frequencyHz;
+
+                _kneeboardServer.SimConnectSetRadioFrequency(radio, frequencyHz);
+
+                ResponseJson(context, "{\"success\":true,\"error\":null}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SimConnect API] Radio frequency error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                string errorJson = Newtonsoft.Json.JsonConvert.SerializeObject(new { success = false, error = ex.Message });
+                ResponseJson(context, errorJson);
+            }
+        }
+
+        // ============================================================================
         // OpenAIP Cache Methods
         // ============================================================================
 
@@ -1996,6 +2156,31 @@ namespace Kneeboard_Server
             else if (command.StartsWith("api/wind/", StringComparison.OrdinalIgnoreCase))
             {
                 HandleWindProxy(context);
+                return;
+            }
+            else if (command == "api/simconnect/position")
+            {
+                HandleSimConnectPositionRequest(context);
+                return;
+            }
+            else if (command == "api/simconnect/status")
+            {
+                HandleSimConnectStatusRequest(context);
+                return;
+            }
+            else if (command == "api/simconnect/teleport")
+            {
+                HandleSimConnectTeleportRequest(context);
+                return;
+            }
+            else if (command == "api/simconnect/pause")
+            {
+                HandleSimConnectPauseRequest(context);
+                return;
+            }
+            else if (command == "api/simconnect/radio/frequency")
+            {
+                HandleSimConnectRadioFrequencyRequest(context);
                 return;
             }
             else if (command == "getDocumentsList")

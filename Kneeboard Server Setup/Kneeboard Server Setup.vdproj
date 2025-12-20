@@ -346,12 +346,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_67DA43C59D614D838E8E6C7025E57761"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_67F93D3CB3CC43318EE36839933443FE"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -574,12 +568,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_900A423091194457BD16363D56483248"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_95E86EFA77C948F7AAA01E2A22252214"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -778,12 +766,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_CFFC5B289A9A41F09568CD4B517FA2BB"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_D13EF703DE594D4C8F08E86B2FDA4723"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -954,6 +936,12 @@
         {
         "MsmKey" = "8:_FF1AF79B77E969C2F5BBCBD1901FE7B9"
         "OwnerKey" = "8:_BCE53D51A9D6DC597769091B456174D2"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_7DCD37C054CD03BF68795425DC29B1CF"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -1134,12 +1122,6 @@
         {
         "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_76EF229AB9A1F676527517858575D696"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_7DCD37C054CD03BF68795425DC29B1CF"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -2100,26 +2082,6 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_67DA43C59D614D838E8E6C7025E57761"
-            {
-            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\navlog-standalone.html"
-            "TargetName" = "8:navlog-standalone.html"
-            "Tag" = "8:"
-            "Folder" = "8:_12C736CD5B81462F92BF28B77A49A698"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_67F93D3CB3CC43318EE36839933443FE"
             {
             "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\leaflet\\airplane.css"
@@ -2790,26 +2752,6 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_900A423091194457BD16363D56483248"
-            {
-            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\navlog-sync.js"
-            "TargetName" = "8:navlog-sync.js"
-            "Tag" = "8:"
-            "Folder" = "8:_12C736CD5B81462F92BF28B77A49A698"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_95E86EFA77C948F7AAA01E2A22252214"
             {
             "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\documents.js"
@@ -3440,26 +3382,6 @@
             {
             "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\notepad.js"
             "TargetName" = "8:notepad.js"
-            "Tag" = "8:"
-            "Folder" = "8:_12C736CD5B81462F92BF28B77A49A698"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_CFFC5B289A9A41F09568CD4B517FA2BB"
-            {
-            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\navigationlog.html"
-            "TargetName" = "8:navigationlog.html"
             "Tag" = "8:"
             "Folder" = "8:_12C736CD5B81462F92BF28B77A49A698"
             "Condition" = "8:"

@@ -29,6 +29,7 @@ namespace Kneeboard_Server
 {
     public partial class Kneeboard_Server : Form
     {
+        private static Kneeboard_Server instance;
         private bool _dragging = false;
         private Point _start_point = new Point(0, 0);
         public static string folderpath = "";
@@ -44,6 +45,9 @@ namespace Kneeboard_Server
         private static readonly object simbriefSyncLock = new object();
         private static bool isBackgroundSyncRunning = false;
         private const int SIMBRIEF_CHECK_INTERVAL_MS = 180000; // 3 minutes
+
+        // SimConnect Manager
+        private SimConnectManager simConnectManager;
 
         /// <summary>
         /// Loads persisted flightplan data from Settings on startup
@@ -111,6 +115,17 @@ namespace Kneeboard_Server
                 Properties.Settings.Default.cachedSimbriefOFPData = "";
                 Properties.Settings.Default.Save();
                 Console.WriteLine("[Persistence] Flightplan data cleared from settings");
+
+                // OFP PDF aus Dokumentenliste entfernen
+                if (instance != null) // Prüfen ob Instanz existiert
+                {
+                    if (instance.RemoveSimbriefOFPFromDocumentList())
+                    {
+                        instance.UpdateFileList();
+                        instance.SaveDocumentState();
+                        Console.WriteLine("[SimBrief] OFP PDF removed from document list");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -237,6 +252,54 @@ namespace Kneeboard_Server
                 // Persist to settings
                 SaveFlightplanDataToSettings();
 
+                // OFP PDF herunterladen und zur Liste hinzufügen
+                var ofpNode = xmlDoc.DocumentElement.SelectSingleNode("/OFP/files/pdf/link");
+                if (ofpNode != null)
+                {
+                    string simbriefOFP = ofpNode.InnerText;
+
+                    // Simbrief Ordner erstellen falls nicht vorhanden
+                    if (!Directory.Exists(folderpath + @"\Simbrief"))
+                    {
+                        Directory.CreateDirectory(folderpath + @"\Simbrief");
+                    }
+
+                    // PDF herunterladen
+                    using (var client = new WebClient())
+                    {
+                        client.DownloadFile(
+                            new Uri("https://www.simbrief.com/ofp/flightplans/" + simbriefOFP),
+                            folderpath + @"\Simbrief\OFP.pdf"
+                        );
+                    }
+
+                    // Zur Dokumentenliste hinzufügen (Thread-safe UI-Update)
+                    if (instance != null)
+                    {
+                        if (instance.InvokeRequired)
+                        {
+                            instance.BeginInvoke(new Action(() =>
+                            {
+                                if (instance.AddSimbriefOFPToDocumentList())
+                                {
+                                    instance.UpdateFileList();
+                                    instance.SaveDocumentState();
+                                    Console.WriteLine("[SimBrief Background] OFP PDF updated in document list");
+                                }
+                            }));
+                        }
+                        else
+                        {
+                            if (instance.AddSimbriefOFPToDocumentList())
+                            {
+                                instance.UpdateFileList();
+                                instance.SaveDocumentState();
+                                Console.WriteLine("[SimBrief Background] OFP PDF updated in document list");
+                            }
+                        }
+                    }
+                }
+
                 Console.WriteLine("[SimBrief Background] Background sync complete - data ready for instant use");
             }
             catch (Exception ex)
@@ -340,6 +403,73 @@ namespace Kneeboard_Server
             }
         }
 
+        private bool AddSimbriefOFPToDocumentList()
+        {
+            try
+            {
+                // 1. Pfad zum OFP PDF definieren
+                string ofpPath = folderpath + @"\Simbrief\OFP.pdf";
+
+                // 2. Überprüfen ob Datei existiert
+                if (!System.IO.File.Exists(ofpPath))
+                    return false;
+
+                // 3. "Simbrief" Ordner in foldersList finden oder erstellen
+                KneeboardFolder simbriefFolder = foldersList.FirstOrDefault(f => f.Name == "Simbrief");
+                if (simbriefFolder == null)
+                {
+                    simbriefFolder = new KneeboardFolder("Simbrief", new List<KneeboardFile>());
+                    foldersList.Add(simbriefFolder);
+                }
+
+                // 4. Alte OFP Datei entfernen (falls vorhanden)
+                simbriefFolder.Files.RemoveAll(x => x.Name == "OFP");
+
+                // 5. Neue OFP Datei hinzufügen
+                KneeboardFile ofpFile = new KneeboardFile(
+                    name: "OFP",
+                    pages: 0,  // Wird von CreateImages() berechnet
+                    path: ofpPath
+                );
+                simbriefFolder.Files.Add(ofpFile);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error adding Simbrief OFP to document list: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool RemoveSimbriefOFPFromDocumentList()
+        {
+            try
+            {
+                // Simbrief Ordner finden
+                KneeboardFolder simbriefFolder = foldersList.FirstOrDefault(f => f.Name == "Simbrief");
+                if (simbriefFolder == null)
+                    return false; // Kein Simbrief Ordner vorhanden
+
+                // OFP Datei entfernen
+                int removed = simbriefFolder.Files.RemoveAll(x => x.Name == "OFP");
+
+                // Wenn Ordner jetzt leer ist, auch Ordner entfernen
+                if (simbriefFolder.Files.Count == 0)
+                {
+                    foldersList.Remove(simbriefFolder);
+                }
+
+                Console.WriteLine($"[SimBrief] Removed {removed} OFP file(s) from document list");
+                return removed > 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error removing Simbrief OFP from document list: {ex.Message}");
+                return false;
+            }
+        }
+
         private void EnsureDefaultManualsExist()
         {
             try
@@ -420,6 +550,7 @@ namespace Kneeboard_Server
 
         public Kneeboard_Server()
         {
+            instance = this;
             InitializeComponent();
 
             // Load persisted flightplan data from previous session
@@ -427,6 +558,11 @@ namespace Kneeboard_Server
 
             // Start background SimBrief sync to keep OFP data current
             StartBackgroundSimbriefSync();
+
+            // Initialize SimConnect
+            simConnectManager = new SimConnectManager(this.Handle);
+            simConnectManager.Start();
+            Console.WriteLine("[KneeboardServer] SimConnect manager started");
 
             //delete hover color
             loadButton.FlatAppearance.MouseOverBackColor = System.Drawing.Color.Transparent;
@@ -599,6 +735,12 @@ namespace Kneeboard_Server
 
         protected override void WndProc(ref Message m)
         {
+            // Handle SimConnect messages first
+            if (simConnectManager != null)
+            {
+                simConnectManager.HandleWindowMessage(ref m);
+            }
+
             switch (m.Msg)
             {
                 case WM_NCHITTEST:
@@ -1232,7 +1374,42 @@ namespace Kneeboard_Server
                 statusBox.Text = "Status: Server is not running! Plese select a working folder.";
                 statusBox.BackColor = Color.IndianRed;
             }
+
+            // SimConnect cleanup
+            if (simConnectManager != null)
+            {
+                simConnectManager.Stop();
+                simConnectManager.Dispose();
+                simConnectManager = null;
+            }
+
             Application.Exit();
+        }
+
+        // Public API for SimConnect access
+        public SimConnectManager.AircraftPosition? GetSimConnectPosition()
+        {
+            return simConnectManager?.GetLatestPosition();
+        }
+
+        public bool IsSimConnectConnected()
+        {
+            return simConnectManager?.IsConnected ?? false;
+        }
+
+        public void SimConnectTeleport(double lat, double lng, double? altitude = null, double? heading = null, double? speed = null)
+        {
+            simConnectManager?.Teleport(lat, lng, altitude, heading, speed);
+        }
+
+        public void SimConnectSetPause(bool paused)
+        {
+            simConnectManager?.SetPause(paused);
+        }
+
+        public void SimConnectSetRadioFrequency(string radio, uint frequencyHz)
+        {
+            simConnectManager?.SetRadioFrequency(radio, frequencyHz);
         }
 
         private void AddFileButton_Click(object sender, EventArgs e)
@@ -1408,7 +1585,7 @@ namespace Kneeboard_Server
             {
                 if (serverRun == true)
                 {
-                    System.Diagnostics.Process.Start("microsoft-edge:http://localhost:815/navigationlog.html");
+                    System.Diagnostics.Process.Start("microsoft-edge:http://localhost:815/Kneeboard.html");
                 }
             }
             else
@@ -1529,6 +1706,14 @@ namespace Kneeboard_Server
                                     client.DownloadFile(new Uri("https://www.simbrief.com/ofp/flightplans/" + simbriefOFP), folderpath + @"\Simbrief\OFP.pdf");
                                     simbriefDownloaded = true;
                                 }
+                            }
+
+                            // OFP PDF zur Dokumentenliste hinzufügen
+                            if (AddSimbriefOFPToDocumentList())
+                            {
+                                UpdateFileList();      // UI aktualisieren
+                                SaveDocumentState();   // Zustand persistieren
+                                Console.WriteLine("[SimBrief] OFP PDF added to document list");
                             }
 
                             lastFlightplanSource = FlightplanSource.SimBrief;
