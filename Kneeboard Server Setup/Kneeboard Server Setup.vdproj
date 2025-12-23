@@ -718,6 +718,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_AEEBC02D7A354A28B3FD444C1276B788"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_AF2EA16B85DB4F57B23D7D2EF28EE6DE"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -965,12 +971,6 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_7DCD37C054CD03BF68795425DC29B1CF"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_0417B2543A4A4685BC5344132D372D8B"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -1146,6 +1146,12 @@
         {
         "MsmKey" = "8:_UNDEFINED"
         "OwnerKey" = "8:_76EF229AB9A1F676527517858575D696"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_7DCD37C054CD03BF68795425DC29B1CF"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -3267,6 +3273,26 @@
             "Register" = "3:1"
             "Exclude" = "11:FALSE"
             "IsDependency" = "11:TRUE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_AEEBC02D7A354A28B3FD444C1276B788"
+            {
+            "SourcePath" = "8:..\\Kneeboard Server\\bin\\x64\\Debug\\data\\leaflet\\leaflet.groupedlayercontrol.js"
+            "TargetName" = "8:leaflet.groupedlayercontrol.js"
+            "Tag" = "8:"
+            "Folder" = "8:_D2F73101B3824D759FCE1FAC575D43C9"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_AF2EA16B85DB4F57B23D7D2EF28EE6DE"
