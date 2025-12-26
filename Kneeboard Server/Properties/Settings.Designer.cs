@@ -322,5 +322,113 @@ namespace Kneeboard_Server.Properties {
                 this["msfsPackagesPath"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string NavigraphClientId {
+            get {
+                return ((string)(this["NavigraphClientId"]));
+            }
+            set {
+                this["NavigraphClientId"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string NavigraphClientSecret {
+            get {
+                return ((string)(this["NavigraphClientSecret"]));
+            }
+            set {
+                this["NavigraphClientSecret"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string NavigraphAccessToken {
+            get {
+                return ((string)(this["NavigraphAccessToken"]));
+            }
+            set {
+                this["NavigraphAccessToken"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string NavigraphRefreshToken {
+            get {
+                return ((string)(this["NavigraphRefreshToken"]));
+            }
+            set {
+                this["NavigraphRefreshToken"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string NavigraphTokenExpiry {
+            get {
+                return ((string)(this["NavigraphTokenExpiry"]));
+            }
+            set {
+                this["NavigraphTokenExpiry"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string NavigraphUsername {
+            get {
+                return ((string)(this["NavigraphUsername"]));
+            }
+            set {
+                this["NavigraphUsername"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool firstNavdataAsk {
+            get {
+                return ((bool)(this["firstNavdataAsk"]));
+            }
+            set {
+                this["firstNavdataAsk"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool navdataIndexed {
+            get {
+                return ((bool)(this["navdataIndexed"]));
+            }
+            set {
+                this["navdataIndexed"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int navdataAirportCount {
+            get {
+                return ((int)(this["navdataAirportCount"]));
+            }
+            set {
+                this["navdataAirportCount"] = value;
+            }
+        }
     }
 }

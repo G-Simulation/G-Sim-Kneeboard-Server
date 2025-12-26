@@ -50,6 +50,8 @@ namespace Kneeboard_Server
             this.deleteFileButton = new System.Windows.Forms.Button();
             this.addFileButton = new System.Windows.Forms.Button();
             this.statusBox = new System.Windows.Forms.TextBox();
+            this.navdataProgressBar = new System.Windows.Forms.ProgressBar();
+            this.navdataProgressLabel = new System.Windows.Forms.Label();
             this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.showToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -116,17 +118,19 @@ namespace Kneeboard_Server
             this.label3.Size = new System.Drawing.Size(137, 20);
             this.label3.TabIndex = 30;
             this.label3.Text = "Kneeboard Server";
-            // 
-            // information
-            // 
+            //
+            // information (Settings button)
+            //
             this.information.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.information.AutoSize = true;
+            this.information.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.information.Font = new System.Drawing.Font("Segoe MDL2 Assets", 8.25F);
             this.information.ForeColor = System.Drawing.SystemColors.Highlight;
-            this.information.Location = new System.Drawing.Point(334, 17);
+            this.information.Location = new System.Drawing.Point(330, 17);
             this.information.Name = "information";
-            this.information.Size = new System.Drawing.Size(9, 13);
+            this.information.Size = new System.Drawing.Size(13, 13);
             this.information.TabIndex = 37;
-            this.information.Text = "i";
+            this.information.Text = "\uE713";
             this.information.Click += new System.EventHandler(this.Information_Click);
             this.information.MouseHover += new System.EventHandler(this.Information_MouseHover);
             // 
@@ -158,6 +162,8 @@ namespace Kneeboard_Server
             this.panel1.Controls.Add(this.deleteFileButton);
             this.panel1.Controls.Add(this.addFileButton);
             this.panel1.Controls.Add(this.statusBox);
+            this.panel1.Controls.Add(this.navdataProgressLabel);
+            this.panel1.Controls.Add(this.navdataProgressBar);
             this.panel1.Location = new System.Drawing.Point(12, 41);
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(416, 274);
@@ -308,7 +314,33 @@ namespace Kneeboard_Server
             this.statusBox.Size = new System.Drawing.Size(416, 21);
             this.statusBox.TabIndex = 44;
             this.statusBox.Text = "Status: Server is not running! Plese select a working folder.";
-            // 
+            //
+            // navdataProgressBar
+            //
+            this.navdataProgressBar.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.navdataProgressBar.Location = new System.Drawing.Point(0, 253);
+            this.navdataProgressBar.Name = "navdataProgressBar";
+            this.navdataProgressBar.Size = new System.Drawing.Size(416, 21);
+            this.navdataProgressBar.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
+            this.navdataProgressBar.TabIndex = 55;
+            this.navdataProgressBar.Visible = false;
+            //
+            // navdataProgressLabel
+            //
+            this.navdataProgressLabel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.navdataProgressLabel.BackColor = System.Drawing.Color.FromArgb(0, 120, 215);
+            this.navdataProgressLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.navdataProgressLabel.ForeColor = System.Drawing.Color.White;
+            this.navdataProgressLabel.Location = new System.Drawing.Point(0, 253);
+            this.navdataProgressLabel.Name = "navdataProgressLabel";
+            this.navdataProgressLabel.Size = new System.Drawing.Size(416, 21);
+            this.navdataProgressLabel.TabIndex = 56;
+            this.navdataProgressLabel.Text = "";
+            this.navdataProgressLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.navdataProgressLabel.Visible = false;
+            //
             // contextMenuStrip1
             // 
             this.contextMenuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
@@ -419,6 +451,8 @@ namespace Kneeboard_Server
         private System.Windows.Forms.Button deleteFileButton;
         private System.Windows.Forms.Button addFileButton;
         private System.Windows.Forms.TextBox statusBox;
+        private System.Windows.Forms.ProgressBar navdataProgressBar;
+        private System.Windows.Forms.Label navdataProgressLabel;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
         private System.Windows.Forms.ToolStripMenuItem showToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;

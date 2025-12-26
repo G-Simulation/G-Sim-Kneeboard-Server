@@ -12,6 +12,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Kneeboard_Server.Navigraph;
 using static Kneeboard_Server.Kneeboard_Server;
 
 namespace Kneeboard_Server
@@ -19,6 +20,11 @@ namespace Kneeboard_Server
     public class SimpleHTTPServer
     {
         private Kneeboard_Server _kneeboardServer;
+
+        // Navigraph Integration
+        private static NavigraphAuthService _navigraphAuth;
+        private static NavigraphDataService _navigraphData;
+        private static readonly object _navigraphLock = new object();
         // Load API key: first from secrets.config (via AppSettings), fallback to user settings, then hardcoded default
         private string OPENAIP_API_KEY
         {
@@ -136,6 +142,71 @@ namespace Kneeboard_Server
 
             // Start loading/updating boundaries in background (VATSIM, IVAO, TRACON)
             StartBoundariesUpdateCheck();
+
+            // Initialize Navigraph services
+            InitializeNavigraphServices();
+        }
+
+        /// <summary>
+        /// Initialize Navigraph authentication and data services
+        /// </summary>
+        private static void InitializeNavigraphServices()
+        {
+            lock (_navigraphLock)
+            {
+                if (_navigraphAuth == null)
+                {
+                    _navigraphAuth = new NavigraphAuthService();
+                    _navigraphData = new NavigraphDataService(_navigraphAuth);
+
+                    // If already authenticated, check for updates
+                    if (_navigraphAuth.IsAuthenticated)
+                    {
+                        Console.WriteLine("[Navigraph] User already authenticated, checking for navdata updates...");
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _navigraphData.CheckAndDownloadUpdatesAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Navigraph] Update check failed: {ex.Message}");
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Get Navigraph authentication service (for UI integration)
+        /// </summary>
+        public static NavigraphAuthService GetNavigraphAuth()
+        {
+            lock (_navigraphLock)
+            {
+                if (_navigraphAuth == null)
+                {
+                    InitializeNavigraphServices();
+                }
+                return _navigraphAuth;
+            }
+        }
+
+        /// <summary>
+        /// Get Navigraph data service (for UI integration)
+        /// </summary>
+        public static NavigraphDataService GetNavigraphData()
+        {
+            lock (_navigraphLock)
+            {
+                if (_navigraphData == null)
+                {
+                    InitializeNavigraphServices();
+                }
+                return _navigraphData;
+            }
         }
 
         /// <summary>
@@ -364,6 +435,254 @@ namespace Kneeboard_Server
             }
         }
 
+        #region Procedure API Handlers
+
+        /// <summary>
+        /// Handle request for procedure details: api/procedure/{airport}/{type}/{name}
+        /// Returns detailed waypoints with coordinates, altitudes, and speeds
+        /// </summary>
+        private void HandleProcedureRequest(HttpListenerContext context, string path)
+        {
+            try
+            {
+                var parts = path.Split('/');
+                if (parts.Length < 3)
+                {
+                    ResponseJson(context, "{\"error\":\"Invalid path. Use: api/procedure/{airport}/{SID|STAR}/{name}\"}");
+                    return;
+                }
+
+                string airport = parts[0].ToUpperInvariant();
+                string type = parts[1].ToUpperInvariant();
+                string procedureName = parts[2];
+                string transition = parts.Length > 3 ? parts[3] : null;
+
+                if (type != "SID" && type != "STAR")
+                {
+                    ResponseJson(context, "{\"error\":\"Type must be SID or STAR\"}");
+                    return;
+                }
+
+                // Try to get procedure from available sources
+                var procedureDetail = GetProcedureDetailFromSources(airport, procedureName, type, transition);
+
+                if (procedureDetail != null)
+                {
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(procedureDetail);
+                    ResponseJson(context, json);
+                }
+                else
+                {
+                    ResponseJson(context, $"{{\"error\":\"Procedure {procedureName} not found for {airport}\"}}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Procedure API] Error: {ex.Message}");
+                ResponseJson(context, $"{{\"error\":\"{ex.Message.Replace("\"", "\\\"")}\"}}" );
+            }
+        }
+
+        /// <summary>
+        /// Handle request for all procedures at an airport: api/procedures/{airport}
+        /// Returns list of SIDs and STARs with basic info
+        /// </summary>
+        private void HandleProceduresListRequest(HttpListenerContext context, string airportIcao)
+        {
+            try
+            {
+                string airport = airportIcao.ToUpperInvariant();
+
+                var result = new
+                {
+                    airport = airport,
+                    sids = new List<Navigraph.ProcedureSummary>(),
+                    stars = new List<Navigraph.ProcedureSummary>(),
+                    source = "none"
+                };
+
+                // Try MSFS 2024 NavdataDatabase first (SimConnect data)
+                var navdataDb = Kneeboard_Server.NavdataDB;
+                Console.WriteLine($"[Procedure API] NavdataDB: {(navdataDb != null ? "available" : "null")}, ProcedureCount: {navdataDb?.ProcedureCount ?? 0}");
+                if (navdataDb != null && navdataDb.ProcedureCount > 0)
+                {
+                    try
+                    {
+                        var sids = navdataDb.GetSIDs(airport);
+                        var stars = navdataDb.GetSTARs(airport);
+                        Console.WriteLine($"[Procedure API] MSFS2024 query for {airport}: {sids?.Count ?? 0} SIDs, {stars?.Count ?? 0} STARs");
+
+                        if ((sids != null && sids.Count > 0) || (stars != null && stars.Count > 0))
+                        {
+                            result = new
+                            {
+                                airport = airport,
+                                sids = sids ?? new List<Navigraph.ProcedureSummary>(),
+                                stars = stars ?? new List<Navigraph.ProcedureSummary>(),
+                                source = "MSFS2024"
+                            };
+                            Console.WriteLine($"[Procedure API] Returning MSFS2024 data for {airport}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Procedure API] MSFS 2024 error: {ex.Message}");
+                    }
+                }
+
+                // Try MSFS 2020 navdata (BGL parsing) if no results yet
+                if (result.source == "none" && Properties.Settings.Default.navdataIndexed)
+                {
+                    var versions = Navigraph.BGL.MsfsNavdataService.DetectInstalledVersions();
+                    foreach (var version in versions)
+                    {
+                        if (version == Navigraph.BGL.MsfsVersion.MSFS2020)
+                        {
+                            try
+                            {
+                                using (var service = new Navigraph.BGL.MsfsNavdataService(version))
+                                {
+                                    if (service.IsAvailable)
+                                    {
+                                        service.IndexNavdata();
+                                        var sids = service.GetSIDs(airport);
+                                        var stars = service.GetSTARs(airport);
+
+                                        if (sids.Count > 0 || stars.Count > 0)
+                                        {
+                                            result = new
+                                            {
+                                                airport = airport,
+                                                sids = sids,
+                                                stars = stars,
+                                                source = "MSFS2020"
+                                            };
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Procedure API] MSFS 2020 error: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+
+                // Try Navigraph if available
+                if (result.source == "none")
+                {
+                    var navigraphData = GetNavigraphData();
+                    if (navigraphData != null && navigraphData.IsDataAvailable)
+                    {
+                        try
+                        {
+                            var sids = navigraphData.GetSIDs(airport);
+                            var stars = navigraphData.GetSTARs(airport);
+
+                            if ((sids != null && sids.Count > 0) || (stars != null && stars.Count > 0))
+                            {
+                                result = new
+                                {
+                                    airport = airport,
+                                    sids = sids ?? new List<Navigraph.ProcedureSummary>(),
+                                    stars = stars ?? new List<Navigraph.ProcedureSummary>(),
+                                    source = "Navigraph"
+                                };
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Procedure API] Navigraph error: {ex.Message}");
+                        }
+                    }
+                }
+
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(result);
+                ResponseJson(context, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Procedure API] Error: {ex.Message}");
+                ResponseJson(context, $"{{\"error\":\"{ex.Message.Replace("\"", "\\\"")}\"}}" );
+            }
+        }
+
+        /// <summary>
+        /// Get procedure details from available sources (MSFS 2024, MSFS 2020, Navigraph)
+        /// </summary>
+        private Navigraph.ProcedureDetail GetProcedureDetailFromSources(
+            string airport, string procedureName, string type, string transition)
+        {
+            bool isSid = type == "SID";
+
+            // 1. Try MSFS 2024 NavdataDatabase (SimConnect data)
+            // TODO: Implement GetProcedureDetail in NavdataDatabase for full waypoint details
+            var navdataDb = Kneeboard_Server.NavdataDB;
+            if (navdataDb != null && navdataDb.ProcedureCount > 0)
+            {
+                // NavdataDatabase currently only supports GetSIDs/GetSTARs list
+                // Full procedure detail (waypoints) not yet implemented
+                Console.WriteLine($"[Procedure API] NavdataDatabase has data but GetProcedureDetail not implemented yet");
+            }
+
+            // 2. Try MSFS 2020 navdata (BGL parsing)
+            if (Properties.Settings.Default.navdataIndexed)
+            {
+                var versions = Navigraph.BGL.MsfsNavdataService.DetectInstalledVersions();
+                foreach (var version in versions)
+                {
+                    if (version == Navigraph.BGL.MsfsVersion.MSFS2020)
+                    {
+                        try
+                        {
+                            using (var service = new Navigraph.BGL.MsfsNavdataService(version))
+                            {
+                                if (service.IsAvailable)
+                                {
+                                    service.IndexNavdata();
+                                    var procType = isSid ? Navigraph.ProcedureType.SID : Navigraph.ProcedureType.STAR;
+                                    var detail = service.GetProcedureDetail(airport, procedureName, transition, procType);
+                                    if (detail != null && detail.Waypoints.Count > 0)
+                                    {
+                                        return detail;
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Procedure API] MSFS 2020 detail error: {ex.Message}");
+                        }
+                    }
+                }
+            }
+
+            // 2. Try Navigraph
+            var navigraphData = GetNavigraphData();
+            if (navigraphData != null && navigraphData.IsDataAvailable)
+            {
+                try
+                {
+                    var procType = isSid ? Navigraph.ProcedureType.SID : Navigraph.ProcedureType.STAR;
+                    var detail = navigraphData.GetProcedureDetail(airport, procedureName, transition, procType);
+                    if (detail != null && detail.Waypoints.Count > 0)
+                    {
+                        return detail;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Procedure API] Navigraph detail error: {ex.Message}");
+                }
+            }
+
+            return null;
+        }
+
+        #endregion
+
         private void HandleNoaaProxy(HttpListenerContext context, string icaoRaw, bool isTaf)
         {
             string icao = (icaoRaw ?? string.Empty).Trim().ToUpperInvariant();
@@ -461,11 +780,13 @@ namespace Kneeboard_Server
             {
                 // Parse the incoming request to extract coordinates
                 // Expected format: {"locations": [{"latitude": XX, "longitude": XX}]}
+                Console.WriteLine($"[Elevation] Request body: {requestBody.Substring(0, Math.Min(200, requestBody.Length))}...");
                 dynamic requestData = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(requestBody);
-                var locations = requestData.locations;
+                var locations = requestData?.locations;
 
                 if (locations == null || locations.Count == 0)
                 {
+                    Console.WriteLine($"[Elevation] ERROR: No locations in request. Body length: {requestBody.Length}");
                     context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                     var errorBuffer = Encoding.UTF8.GetBytes("{\"error\":\"No locations provided\"}");
                     context.Response.ContentType = "application/json";
@@ -473,58 +794,88 @@ namespace Kneeboard_Server
                     context.Response.OutputStream.Write(errorBuffer, 0, errorBuffer.Length);
                     return;
                 }
+                Console.WriteLine($"[Elevation] Processing {locations.Count} locations");
 
-                // Build comma-separated lat/lng lists for Open-Meteo API
-                var latitudes = new List<string>();
-                var longitudes = new List<string>();
+                // Open-Meteo API limit: max 100 locations per request
+                const int MAX_LOCATIONS_PER_REQUEST = 100;
+                var allResults = new List<object>();
+
+                // Convert locations to a list for easier batch processing
+                var locationsList = new List<dynamic>();
                 foreach (var loc in locations)
                 {
-                    latitudes.Add(((double)loc.latitude).ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    longitudes.Add(((double)loc.longitude).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    locationsList.Add(loc);
                 }
 
-                // Use Open-Meteo API (more reliable than open-elevation.com)
-                string apiUrl = $"https://api.open-meteo.com/v1/elevation?latitude={string.Join(",", latitudes)}&longitude={string.Join(",", longitudes)}";
+                // Process in batches if needed
+                int totalBatches = (int)Math.Ceiling((double)locationsList.Count / MAX_LOCATIONS_PER_REQUEST);
+                Console.WriteLine($"[Elevation] Processing in {totalBatches} batch(es)");
 
-                var outboundRequest = (HttpWebRequest)WebRequest.Create(apiUrl);
-                outboundRequest.Method = "GET";
-                outboundRequest.Accept = "application/json";
-                outboundRequest.Timeout = 10000;
-                outboundRequest.ReadWriteTimeout = 10000;
-
-                using (var upstreamResponse = (HttpWebResponse)outboundRequest.GetResponse())
+                for (int batchIndex = 0; batchIndex < totalBatches; batchIndex++)
                 {
-                    string responseBody;
-                    using (var upstreamStream = upstreamResponse.GetResponseStream())
-                    using (var reader = new StreamReader(upstreamStream))
+                    int startIndex = batchIndex * MAX_LOCATIONS_PER_REQUEST;
+                    int batchSize = Math.Min(MAX_LOCATIONS_PER_REQUEST, locationsList.Count - startIndex);
+
+                    // Build comma-separated lat/lng lists for this batch
+                    var latitudes = new List<string>();
+                    var longitudes = new List<string>();
+                    for (int i = startIndex; i < startIndex + batchSize; i++)
                     {
-                        responseBody = reader.ReadToEnd();
+                        latitudes.Add(((double)locationsList[i].latitude).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        longitudes.Add(((double)locationsList[i].longitude).ToString(System.Globalization.CultureInfo.InvariantCulture));
                     }
 
-                    // Parse Open-Meteo response: {"elevation": [123.5, 456.7]}
-                    dynamic meteoData = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(responseBody);
-                    var elevations = meteoData.elevation;
+                    // Use Open-Meteo API
+                    string apiUrl = $"https://api.open-meteo.com/v1/elevation?latitude={string.Join(",", latitudes)}&longitude={string.Join(",", longitudes)}";
 
-                    // Convert to open-elevation format: {"results": [{"latitude": XX, "longitude": XX, "elevation": XX}]}
-                    var results = new List<object>();
-                    for (int i = 0; i < locations.Count && i < elevations.Count; i++)
+                    var outboundRequest = (HttpWebRequest)WebRequest.Create(apiUrl);
+                    outboundRequest.Method = "GET";
+                    outboundRequest.Accept = "application/json";
+                    outboundRequest.Timeout = 10000;
+                    outboundRequest.ReadWriteTimeout = 10000;
+
+                    using (var upstreamResponse = (HttpWebResponse)outboundRequest.GetResponse())
                     {
-                        results.Add(new
+                        string responseBody;
+                        using (var upstreamStream = upstreamResponse.GetResponseStream())
+                        using (var reader = new StreamReader(upstreamStream))
                         {
-                            latitude = (double)locations[i].latitude,
-                            longitude = (double)locations[i].longitude,
-                            elevation = (double)elevations[i]
-                        });
+                            responseBody = reader.ReadToEnd();
+                        }
+
+                        // Parse Open-Meteo response: {"elevation": [123.5, 456.7]}
+                        dynamic meteoData = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(responseBody);
+                        var elevations = meteoData.elevation;
+
+                        // Add results from this batch
+                        for (int i = 0; i < batchSize && i < elevations.Count; i++)
+                        {
+                            allResults.Add(new
+                            {
+                                latitude = (double)locationsList[startIndex + i].latitude,
+                                longitude = (double)locationsList[startIndex + i].longitude,
+                                elevation = (double)elevations[i]
+                            });
+                        }
                     }
 
-                    string payload = Newtonsoft.Json.JsonConvert.SerializeObject(new { results = results });
-                    var buffer = Encoding.UTF8.GetBytes(payload);
-
-                    context.Response.StatusCode = 200;
-                    context.Response.ContentType = "application/json";
-                    context.Response.ContentLength64 = buffer.Length;
-                    context.Response.OutputStream.Write(buffer, 0, buffer.Length);
+                    // Small delay between batches to avoid rate limiting
+                    if (batchIndex < totalBatches - 1)
+                    {
+                        System.Threading.Thread.Sleep(50);
+                    }
                 }
+
+                Console.WriteLine($"[Elevation] Returning {allResults.Count} elevation results");
+
+                // Return combined results
+                string payload = Newtonsoft.Json.JsonConvert.SerializeObject(new { results = allResults });
+                var buffer = Encoding.UTF8.GetBytes(payload);
+
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "application/json";
+                context.Response.ContentLength64 = buffer.Length;
+                context.Response.OutputStream.Write(buffer, 0, buffer.Length);
             }
             catch (WebException ex)
             {
@@ -2248,61 +2599,288 @@ namespace Kneeboard_Server
         }
 
         // ============================================================================
-        // Procedure API Methods (disabled - navdata integration removed)
+        // Procedure API Methods (Navigraph + SimBrief Hybrid)
         // ============================================================================
 
+        /// <summary>
+        /// Get list of SIDs for an airport
+        /// URL: /api/procedures/sids/{icao}
+        /// </summary>
         private void HandleGetSIDListRequest(HttpListenerContext context, string command)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available. Use /api/procedures/simbrief instead.\"}");
+            try
+            {
+                string icao = command.Replace("/api/procedures/sids/", "").Trim('/').ToUpper();
+                if (string.IsNullOrEmpty(icao))
+                {
+                    context.Response.StatusCode = 400;
+                    ResponseJson(context, "{\"error\":\"ICAO code required\"}");
+                    return;
+                }
+
+                // Try Navigraph first
+                if (_navigraphAuth?.IsAuthenticated == true && _navigraphData?.IsDataAvailable == true)
+                {
+                    var sids = _navigraphData.GetSIDs(icao);
+                    var response = new SIDListResponse
+                    {
+                        Source = "Navigraph",
+                        AiracCycle = _navigraphData.CurrentAiracCycle,
+                        Airport = icao,
+                        Sids = sids
+                    };
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(response, Newtonsoft.Json.Formatting.Indented);
+                    ResponseJson(context, json);
+                    return;
+                }
+
+                // Fallback to SimBrief
+                var sidData = Kneeboard_Server.GetSidWaypointsFromSimbrief();
+                string fallbackJson = Newtonsoft.Json.JsonConvert.SerializeObject(sidData, Newtonsoft.Json.Formatting.Indented);
+                ResponseJson(context, fallbackJson);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Procedure API] SID list error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
+        /// <summary>
+        /// Get list of STARs for an airport
+        /// URL: /api/procedures/stars/{icao}
+        /// </summary>
         private void HandleGetSTARListRequest(HttpListenerContext context, string command)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available. Use /api/procedures/simbrief instead.\"}");
+            try
+            {
+                string icao = command.Replace("/api/procedures/stars/", "").Trim('/').ToUpper();
+                if (string.IsNullOrEmpty(icao))
+                {
+                    context.Response.StatusCode = 400;
+                    ResponseJson(context, "{\"error\":\"ICAO code required\"}");
+                    return;
+                }
+
+                // Try Navigraph first
+                if (_navigraphAuth?.IsAuthenticated == true && _navigraphData?.IsDataAvailable == true)
+                {
+                    var stars = _navigraphData.GetSTARs(icao);
+                    var response = new STARListResponse
+                    {
+                        Source = "Navigraph",
+                        AiracCycle = _navigraphData.CurrentAiracCycle,
+                        Airport = icao,
+                        Stars = stars
+                    };
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(response, Newtonsoft.Json.Formatting.Indented);
+                    ResponseJson(context, json);
+                    return;
+                }
+
+                // Fallback to SimBrief
+                var starData = Kneeboard_Server.GetStarWaypointsFromSimbrief();
+                string fallbackJson = Newtonsoft.Json.JsonConvert.SerializeObject(starData, Newtonsoft.Json.Formatting.Indented);
+                ResponseJson(context, fallbackJson);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Procedure API] STAR list error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
+        /// <summary>
+        /// Get list of approaches for an airport
+        /// URL: /api/procedures/approaches/{icao}
+        /// </summary>
         private void HandleGetApproachListRequest(HttpListenerContext context, string command)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available. Use /api/procedures/simbrief instead.\"}");
+            try
+            {
+                string icao = command.Replace("/api/procedures/approaches/", "").Trim('/').ToUpper();
+                if (string.IsNullOrEmpty(icao))
+                {
+                    context.Response.StatusCode = 400;
+                    ResponseJson(context, "{\"error\":\"ICAO code required\"}");
+                    return;
+                }
+
+                // Approaches only available via Navigraph
+                if (_navigraphAuth?.IsAuthenticated == true && _navigraphData?.IsDataAvailable == true)
+                {
+                    var approaches = _navigraphData.GetApproaches(icao);
+                    var response = new ApproachListResponse
+                    {
+                        Source = "Navigraph",
+                        AiracCycle = _navigraphData.CurrentAiracCycle,
+                        Airport = icao,
+                        Approaches = approaches
+                    };
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(response, Newtonsoft.Json.Formatting.Indented);
+                    ResponseJson(context, json);
+                    return;
+                }
+
+                // No fallback for approaches
+                context.Response.StatusCode = 503;
+                ResponseJson(context, "{\"error\":\"Approach data requires Navigraph authentication. Please log in via the Info panel.\"}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Procedure API] Approach list error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
-        private void HandleGetApproachRequest(HttpListenerContext context, string command)
-        {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available.\"}");
-        }
-
+        /// <summary>
+        /// Get detailed procedure with waypoints
+        /// URL: /api/procedures/procedure/{icao}/{name}?transition=xxx&type=SID|STAR|Approach
+        /// </summary>
         private void HandleGetProcedureRequest(HttpListenerContext context, string command)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available. Use /api/procedures/simbrief instead.\"}");
+            try
+            {
+                // Parse: /api/procedures/procedure/EDDM/GIVMI1N
+                string path = command.Replace("/api/procedures/procedure/", "").Trim('/');
+                string[] parts = path.Split('/');
+
+                if (parts.Length < 2)
+                {
+                    context.Response.StatusCode = 400;
+                    ResponseJson(context, "{\"error\":\"Format: /api/procedures/procedure/{icao}/{name}\"}");
+                    return;
+                }
+
+                string icao = parts[0].ToUpper();
+                string procedureName = parts[1].ToUpper();
+
+                // Parse query parameters
+                var query = context.Request.QueryString;
+                string transition = query["transition"];
+                string typeStr = query["type"] ?? "SID";
+                ProcedureType type = ProcedureType.SID;
+                if (Enum.TryParse(typeStr, true, out ProcedureType parsedType))
+                {
+                    type = parsedType;
+                }
+
+                // Only available via Navigraph
+                if (_navigraphAuth?.IsAuthenticated == true && _navigraphData?.IsDataAvailable == true)
+                {
+                    var detail = _navigraphData.GetProcedureDetail(icao, procedureName, transition, type);
+                    if (detail != null && detail.Waypoints.Count > 0)
+                    {
+                        string json = Newtonsoft.Json.JsonConvert.SerializeObject(detail, Newtonsoft.Json.Formatting.Indented);
+                        ResponseJson(context, json);
+                        return;
+                    }
+
+                    context.Response.StatusCode = 404;
+                    ResponseJson(context, $"{{\"error\":\"Procedure {procedureName} not found at {icao}\"}}");
+                    return;
+                }
+
+                // Fallback: return SimBrief procedures if available
+                var simbrief = Kneeboard_Server.GetSimbriefProcedures();
+                string fallbackJson = Newtonsoft.Json.JsonConvert.SerializeObject(simbrief, Newtonsoft.Json.Formatting.Indented);
+                ResponseJson(context, fallbackJson);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Procedure API] Procedure detail error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
+        }
+
+        /// <summary>
+        /// Alias for approach list
+        /// </summary>
+        private void HandleGetApproachRequest(HttpListenerContext context, string command)
+        {
+            // Redirect to approach list handler
+            string newCommand = command.Replace("/api/procedures/approach/", "/api/procedures/approaches/");
+            HandleGetApproachListRequest(context, newCommand);
+        }
+
+        /// <summary>
+        /// Get Navigraph status
+        /// URL: /api/navigraph/status
+        /// </summary>
+        private void HandleNavigraphStatusRequest(HttpListenerContext context)
+        {
+            try
+            {
+                var status = _navigraphData?.GetStatus() ?? new NavigraphStatus { Authenticated = false };
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(status, Newtonsoft.Json.Formatting.Indented);
+                ResponseJson(context, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Navigraph API] Status error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
         private void HandleProcedureStatusRequest(HttpListenerContext context)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available.\"}");
+            HandleNavigraphStatusRequest(context);
         }
 
         private void HandleNavdataFolderInfoRequest(HttpListenerContext context)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available.\"}");
+            try
+            {
+                var info = new
+                {
+                    navigraphAuthenticated = _navigraphAuth?.IsAuthenticated ?? false,
+                    navigraphUsername = _navigraphAuth?.Username,
+                    airacCycle = _navigraphData?.CurrentAiracCycle,
+                    databasePath = _navigraphData?.DatabasePath,
+                    isDataAvailable = _navigraphData?.IsDataAvailable ?? false
+                };
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(info, Newtonsoft.Json.Formatting.Indented);
+                ResponseJson(context, json);
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
         private void HandleProcedureDebugRequest(HttpListenerContext context, string command)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available.\"}");
+            // Debug: return procedure info for an airport
+            string icao = command.Replace("/api/procedures/debug/", "").Trim('/').ToUpper();
+            try
+            {
+                var debug = new
+                {
+                    airport = icao,
+                    navigraphAvailable = _navigraphData?.IsDataAvailable ?? false,
+                    sidsCount = _navigraphData?.GetSIDs(icao)?.Count ?? 0,
+                    starsCount = _navigraphData?.GetSTARs(icao)?.Count ?? 0,
+                    approachesCount = _navigraphData?.GetApproaches(icao)?.Count ?? 0
+                };
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(debug, Newtonsoft.Json.Formatting.Indented);
+                ResponseJson(context, json);
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
         private void HandleAllProceduresDebugRequest(HttpListenerContext context)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"Navdata API not available.\"}");
+            HandleNavdataFolderInfoRequest(context);
         }
 
         /// <summary>
@@ -2366,16 +2944,54 @@ namespace Kneeboard_Server
         }
 
         // ============================================================================
-        // ILS API Methods (disabled - navdata integration removed)
+        // ILS API Methods (Navigraph Integration)
         // ============================================================================
 
         /// <summary>
-        /// Handles ILS API requests - currently disabled
+        /// Get ILS data for an airport
+        /// URL: /api/ils/{icao}
         /// </summary>
         private void HandleIlsRequest(HttpListenerContext context, string command)
         {
-            context.Response.StatusCode = 501;
-            ResponseJson(context, "{\"error\":\"ILS API is not available. Navdata integration has been removed.\"}");
+            try
+            {
+                string icao = command.Replace("/api/ils/", "").Trim('/').ToUpper();
+                if (string.IsNullOrEmpty(icao))
+                {
+                    context.Response.StatusCode = 400;
+                    ResponseJson(context, "{\"error\":\"ICAO code required\"}");
+                    return;
+                }
+
+                // ILS data only available via Navigraph
+                if (_navigraphAuth?.IsAuthenticated == true && _navigraphData?.IsDataAvailable == true)
+                {
+                    var ilsData = _navigraphData.GetILSData(icao);
+                    var runways = _navigraphData.GetRunways(icao);
+
+                    var response = new
+                    {
+                        source = "Navigraph",
+                        airacCycle = _navigraphData.CurrentAiracCycle,
+                        airport = icao,
+                        ils = ilsData,
+                        runways = runways
+                    };
+                    string json = Newtonsoft.Json.JsonConvert.SerializeObject(response, Newtonsoft.Json.Formatting.Indented);
+                    ResponseJson(context, json);
+                    return;
+                }
+
+                // No fallback for ILS data
+                context.Response.StatusCode = 503;
+                ResponseJson(context, "{\"error\":\"ILS data requires Navigraph authentication. Please log in via the Info panel.\"}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ILS API] Error: {ex.Message}");
+                context.Response.StatusCode = 500;
+                ResponseJson(context, $"{{\"error\":\"{ex.Message}\"}}");
+            }
         }
 
         // ============================================================================
@@ -4304,6 +4920,32 @@ namespace Kneeboard_Server
                 return;
             }
 
+            // Normalize coordinates and limit search radius to prevent timeouts
+            if (!isTilesEndpoint)
+            {
+                // Normalize longitude to -180 to +180 range
+                if (double.TryParse(lng, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double lngVal))
+                {
+                    while (lngVal > 180) lngVal -= 360;
+                    while (lngVal < -180) lngVal += 360;
+                    lng = lngVal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                // Clamp latitude to -90 to +90 range
+                if (double.TryParse(lat, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double latVal))
+                {
+                    latVal = Math.Max(-90, Math.Min(90, latVal));
+                    lat = latVal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                // Limit search radius to 500 km (500,000 meters) to prevent API timeouts
+                const int MAX_DISTANCE = 500000;
+                if (int.TryParse(dist, out int distVal) && distVal > MAX_DISTANCE)
+                {
+                    dist = MAX_DISTANCE.ToString();
+                }
+            }
+
             // Determine cache path
             string cachePath = null;
             string tilePart = null;
@@ -4934,6 +5576,20 @@ namespace Kneeboard_Server
                     ResponseJson(context, "{\"exists\":false}");
                 }
             }
+            else if (command.StartsWith("api/procedure/", StringComparison.OrdinalIgnoreCase))
+            {
+                // Get SID/STAR procedure details: api/procedure/{airport}/{type}/{name}
+                // Example: api/procedure/EDDM/SID/GIVMI1N
+                HandleProcedureRequest(context, command.Substring("api/procedure/".Length));
+                return;
+            }
+            else if (command.StartsWith("api/procedures/", StringComparison.OrdinalIgnoreCase))
+            {
+                // Get all SID/STAR procedures for an airport: api/procedures/{airport}
+                // Example: api/procedures/EDDM
+                HandleProceduresListRequest(context, command.Substring("api/procedures/".Length));
+                return;
+            }
             else if (command.StartsWith("api/metar/", StringComparison.OrdinalIgnoreCase))
             {
                 HandleNoaaProxy(context, command.Substring("api/metar/".Length), false);
@@ -5260,6 +5916,12 @@ namespace Kneeboard_Server
             else if (command.StartsWith("api/ils/", StringComparison.OrdinalIgnoreCase))
             {
                 HandleIlsRequest(context, command);
+                return;
+            }
+            // Navigraph API Endpoints
+            else if (command == "api/navigraph/status")
+            {
+                HandleNavigraphStatusRequest(context);
                 return;
             }
             else if (command == "getDocumentsList")
